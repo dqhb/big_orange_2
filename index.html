@@ -443,12 +443,22 @@
                 ctx.beginPath();
                 ctx.moveTo(0, boss.barrelY); ctx.lineTo(canvas.width + camX, boss.barrelY); ctx.stroke(); // Horizontal line warning
 
+                // Barrel Saw Attack Visuals
+            if (boss.state === 'barrel_saw_warn' || boss.state === 'barrel_saw_fire') {
+                ctx.strokeStyle = 'rgba(234, 88, 12, 0.6)'; ctx.lineWidth = 3;
+                ctx.beginPath();
+                // Draw horizontal line across the current screen view
+                ctx.moveTo(camX, boss.barrelY); ctx.lineTo(camX + canvas.width, boss.barrelY); ctx.stroke(); 
+
                 if (boss.state === 'barrel_saw_fire') {
-                    // Draw "barrels" extending from sides
                     ctx.fillStyle = '#525252';
-                    ctx.fillRect(0, boss.barrelY - 15, 30, 30); // Left barrel
-                    ctx.fillRect(canvas.width + camX - 30, boss.barrelY - 15, 30, 30); // Right barrel
+                    // Draw the 4 barrels
+                    let positions = [50, canvas.width * 0.33, canvas.width * 0.66, canvas.width - 50];
+                    positions.forEach(px => {
+                        ctx.fillRect(camX + px - 15, boss.barrelY - 15, 30, 30);
+                    });
                 }
+            }
             }
             ctx.restore(); // End translate(-camX, 0)
             
