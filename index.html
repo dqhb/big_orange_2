@@ -53,15 +53,9 @@
 
         const p = { x: 100, y: 300, vx: 0, vy: 0, r: 15, grav: 0.6, jump: -11, jumps: 2, grounded: false, platVx: 0, platVy: 0, dashCooldown: 0 };
         
-        // Boss upgraded with states and an attack timer and new attack specific data
-        const boss = { 
-            x: 0, y: 180, r: 150, color: '#c2410c', 
-            state: 'idle', timer: 180, 
-            targetX: 0, targetY: 0, // For eye laser
-            barrelY: 0 // For barrel saw attack
-        }; 
+        const boss = { x: 0, y: 180, r: 150, color: '#c2410c', state: 'idle', timer: 180, targetX: 0, targetY: 0 }; 
         
-        let platforms = [], hazards = [], particles = [], lasers = [], barrelSaws = [];
+        let platforms = [], hazards = [], particles = [], lasers = [];
         let genX = 0, lastY = 400;
 
         function resize() { 
@@ -102,7 +96,7 @@
 
         window.startGame = function() {
             document.getElementById('menu').style.display = 'none';
-            platforms = []; hazards = []; particles = []; lasers = []; barrelSaws = [];
+            platforms = []; hazards = []; particles = []; lasers = [];
             score = 0; frame = 0; camX = 0; shakeTime = 0;
             boss.state = 'idle'; boss.timer = 180;
             scoreEl.innerText = score;
@@ -182,36 +176,32 @@
             if (score > 5) {
                 boss.timer--;
                 if (boss.state === 'idle' && boss.timer <= 0) {
-                    // Randomly choose attack: Roar (25%), Eye Laser (25%), Barrel Saw (50%)
-                    let attackChoice = Math.random();
-                    if (attackChoice < 0.25) { 
-                        boss.state = 'roar'; 
-                    } else if (attackChoice < 0.50) { 
-                        boss.state = 'eye_laser_warn'; 
-                        boss.targetX = p.x; boss.targetY = p.y;
-                    } else { // Barrel Saw Attack
-                        boss.state = 'barrel_saw_warn';
-                        boss.barrelY = p.y + (Math.random() - 0.5) * 100; // Aim near player's height
-                        boss.barrelY = Math.max(100, Math.min(canvas.height - 100, boss.barrelY)); // Keep within bounds
+                    boss.state = Math.random() < 0.5 ? 'roar' : 'eye_laser_warn';
+                    boss.timer = 60; // 1 second warning
+                    
+                    if (boss.state === 'eye_laser_warn') {
+                        // Lock onto player's exact current location instantly
+                        boss.targetX = p.x;
+                        boss.targetY = p.y;
                     }
-                    boss.timer = 60; // 1 second warning for all attacks
                 }
 
-                // Eye Laser states
                 if (boss.state === 'eye_laser_warn') {
                     if (boss.timer <= 0) { boss.state = 'eye_laser_fire'; boss.timer = 20; shakeTime = 20; }
                 }
+
                 if (boss.state === 'eye_laser_fire') {
                     let ex1 = boss.x + camX - boss.r*0.3, ey1 = boss.y - boss.r*0.2;
                     let ex2 = boss.x + camX + boss.r*0.3, ey2 = boss.y - boss.r*0.2;
+                    
                     if (distToSegment(p.x, p.y, ex1, ey1, boss.targetX, boss.targetY) < 20 ||
                         distToSegment(p.x, p.y, ex2, ey2, boss.targetX, boss.targetY) < 20) {
                         die();
                     }
+
                     if (boss.timer <= 0) { boss.state = 'idle'; boss.timer = 180; } 
                 }
 
-                // Roar state
                 if (boss.state === 'roar') {
                     if (boss.timer === 59) {
                         shakeTime = 40; 
@@ -223,51 +213,6 @@
                         });
                     }
                     if (boss.timer <= 0) { boss.state = 'idle'; boss.timer = 180; }
-                }
-
-                // Barrel Saw states
-                if (boss.state === 'barrel_saw_warn') {
-                    if (boss.timer <= 0) { boss.state = 'barrel_saw_fire'; boss.timer = 10; shakeTime = 15; }
-                }
-                if (boss.state === 'barrel_saw_fire') {
-                    // Spawn two saws dropping from the barrels
-                    barrelSaws.push({ x: camX + 50, y: boss.barrelY, r: 25, vy: 0, isFalling: true }); // Left barrel
-                    barrelSaws.push({ x: camX + canvas.width - 50, y: boss.barrelY, r: 25, vy: 0, isFalling: true }); // Right barrel
-                    if (boss.timer <= 0) { boss.state = 'idle'; boss.timer = 180; }
-                }
-            }
-
-            // Update Barrel Saws
-            for (let i = barrelSaws.length - 1; i >= 0; i--) {
-                let saw = barrelSaws[i];
-                if (saw.isFalling) {
-                    saw.vy += 0.5; // Gravity
-                    saw.y += saw.vy;
-
-                    // Check for collision with platforms
-                    for (let plat of platforms) {
-                        if (saw.y + saw.r > plat.y && saw.y - saw.r < plat.y + plat.h &&
-                            saw.x + saw.r > plat.x && saw.x - saw.r < plat.x + plat.w &&
-                            saw.vy > 0) { // Only if falling onto platform
-                            
-                            saw.y = plat.y - saw.r; // Sit on platform
-                            saw.isFalling = false;
-                            
-                            // Make platform crumble
-                            if (plat.type === 'static') {
-                                plat.type = 'crumbling';
-                                plat.touched = true; // Start crumble timer
-                                for(let j=0; j<5; j++) spawnParticle(plat.x + Math.random()*plat.w, plat.y, '#facc15', 30, 3);
-                            }
-                            
-                            // Add saw as a permanent hazard
-                            hazards.push({ type: 'saw', x: saw.x, y: saw.y + saw.r, r: saw.r, moveDir: 'static', t: Math.random()*100, speed: 0 });
-                            barrelSaws.splice(i, 1); // Remove from barrelSaws, it's now a hazard
-                            break;
-                        }
-                    }
-                    // Remove if off screen
-                    if (saw.y > canvas.height + 50) { barrelSaws.splice(i, 1); }
                 }
             }
 
@@ -328,7 +273,7 @@
                     } else {
                         plat.fallVy += 0.5;
                         plat.y += plat.fallVy;
-                        hazards = hazards.filter(h => h.p !== plat); // Remove spikes on top if it falls
+                        hazards = hazards.filter(h => h.p !== plat);
                     }
                 }
 
@@ -357,14 +302,12 @@
                     if (h.p.x + h.p.w < camX - 200) hazards.splice(i, 1);
                 } 
                 else if (h.type === 'saw') {
-                    if (h.moveDir !== 'static') { // Only move if not a static hazard saw
-                        h.t += h.speed;
-                        if (h.moveDir === 'y') h.y += Math.sin(h.t) * 3;
-                        if (h.moveDir === 'x') h.x += Math.cos(h.t) * 3;
-                    }
-                    if (Math.random() < 0.3 && h.moveDir !== 'static') spawnParticle(h.x, h.y, '#ea580c', 20, 1);
+                    h.t += h.speed;
+                    if (h.moveDir === 'y') h.y += Math.sin(h.t) * 3;
+                    if (h.moveDir === 'x') h.x += Math.cos(h.t) * 3;
+                    if (Math.random() < 0.3) spawnParticle(h.x, h.y, '#ea580c', 20, 1);
                     if (Math.hypot(p.x - h.x, p.y - h.y) < p.r + h.r - 5) { shakeTime = 20; die(); }
-                    if (h.x < camX - 200 && h.moveDir !== 'static') hazards.splice(i, 1); // Only remove if not static
+                    if (h.x < camX - 200) hazards.splice(i, 1);
                 }
             }
 
@@ -417,8 +360,6 @@
 
             ctx.save();
             ctx.translate(-camX, 0); 
-
-            // Boss Eye Lasers
             if (boss.state === 'eye_laser_warn' || boss.state === 'eye_laser_fire') {
                 let ex1 = boss.x + camX - boss.r*0.3, ey1 = boss.y - boss.r*0.2;
                 let ex2 = boss.x + camX + boss.r*0.3, ey2 = boss.y - boss.r*0.2;
@@ -436,36 +377,12 @@
                 ctx.stroke();
                 ctx.shadowBlur = 0; 
             }
+            ctx.restore();
 
-            // Barrel Saw Attack Visuals
-            if (boss.state === 'barrel_saw_warn' || boss.state === 'barrel_saw_fire') {
-                ctx.strokeStyle = 'rgba(234, 88, 12, 0.6)'; ctx.lineWidth = 3;
-                ctx.beginPath();
-                ctx.moveTo(0, boss.barrelY); ctx.lineTo(canvas.width + camX, boss.barrelY); ctx.stroke(); // Horizontal line warning
-
-                // Barrel Saw Attack Visuals
-            if (boss.state === 'barrel_saw_warn' || boss.state === 'barrel_saw_fire') {
-                ctx.strokeStyle = 'rgba(234, 88, 12, 0.6)'; ctx.lineWidth = 3;
-                ctx.beginPath();
-                // Draw horizontal line across the current screen view
-                ctx.moveTo(camX, boss.barrelY); ctx.lineTo(camX + canvas.width, boss.barrelY); ctx.stroke(); 
-
-                if (boss.state === 'barrel_saw_fire') {
-                    ctx.fillStyle = '#525252';
-                    // Draw the 4 barrels
-                    let positions = [50, canvas.width * 0.33, canvas.width * 0.66, canvas.width - 50];
-                    positions.forEach(px => {
-                        ctx.fillRect(camX + px - 15, boss.barrelY - 15, 30, 30);
-                    });
-                }
-            }
-            }
-            ctx.restore(); // End translate(-camX, 0)
-            
             drawParallax('#431407', 0.15, 120, 0.002, 100); 
             drawParallax('#7c2d12', 0.4, 80, 0.004, 20);    
 
-            ctx.translate(-camX, 0); // Re-apply for game objects
+            ctx.translate(-camX, 0); 
 
             for (let plat of platforms) {
                 let px = plat.x, py = plat.y;
@@ -488,17 +405,6 @@
                     ctx.moveTo(px + plat.w/2, py); ctx.lineTo(px + plat.w/2 - 5, py + plat.h/2); ctx.lineTo(px + plat.w/2 + 5, py + plat.h); ctx.stroke();
                 }
             }
-            for (let saw of barrelSaws) {
-                ctx.save(); ctx.translate(saw.x, saw.y); ctx.rotate(frame * 0.3);
-                ctx.fillStyle = '#ea580c'; ctx.beginPath();
-                for(let j=0; j<8; j++) {
-                    ctx.lineTo(Math.cos(j*Math.PI/4)*saw.r, Math.sin(j*Math.PI/4)*saw.r);
-                    ctx.lineTo(Math.cos(j*Math.PI/4 + 0.2)*(saw.r+10), Math.sin(j*Math.PI/4 + 0.2)*(saw.r+10));
-                }
-                ctx.closePath(); ctx.fill();
-                ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.arc(0,0, saw.r*0.4, 0, Math.PI*2); ctx.fill();
-                ctx.restore();
-            }
 
             for (let h of hazards) {
                 if (h.type === 'spike') {
@@ -519,7 +425,7 @@
 
             for (let l of lasers) {
                 if (l.state === 'warn') {
-                    ctx.fillStyle = 'rgba(234, 88, 12, 0.4)'; ctx.fillRect(l.x - 10, 0, 20, canvas.height);
+                    ctx.fillStyle = 'rgba(234, 88, 12, 0.4)'; ctx.fillRect(l.x - 40, 0, 80, canvas.height);
                 } else if (l.state === 'fire') {
                     ctx.fillStyle = '#ea580c'; ctx.fillRect(l.x - 40, 0, 80, canvas.height);
                     ctx.fillStyle = '#ffffff'; ctx.fillRect(l.x - 20, 0, 40, canvas.height);
