@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>big orange 2</title>
+    <title>Orange Parkour</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #0f172a; font-family: 'Segoe UI', sans-serif; color: white; user-select: none; text-transform: lowercase; }
         canvas { display: block; }
-        #ui { position: absolute; top: 20px; left: 20px; font-size: 2rem; color: #ff8800; font-weight: bold; text-shadow: 0 0 10px #ff8800; z-index: 5; }
+        #ui { position: absolute; top: 20px; left: 20px; font-size: 2rem; color: #f97316; font-weight: bold; text-shadow: 0 0 10px #f97316; z-index: 5; }
         #dash-ui { position: absolute; top: 60px; left: 20px; font-size: 1.2rem; color: #38bdf8; font-weight: bold; }
         #menu, #game-over { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10; }
-        h1 { font-size: 4rem; color: #ff8800; margin: 0 0 10px 0; text-shadow: 0 0 20px #ff8800; }
+        h1 { font-size: 4rem; color: #f97316; margin: 0 0 10px 0; text-shadow: 0 0 20px #f97316; }
         p { color: #cbd5e1; font-size: 1.2rem; margin-bottom: 30px; text-align: center; max-width: 600px; line-height: 1.5; }
-        button { background: #ff8800; color: #0f172a; border: none; padding: 15px 40px; font-size: 1.5rem; font-weight: bold; border-radius: 8px; cursor: pointer; box-shadow: 0 0 15px #ff8800; transition: transform 0.1s; text-transform: lowercase; }
+        button { background: #f97316; color: #0f172a; border: none; padding: 15px 40px; font-size: 1.5rem; font-weight: bold; border-radius: 8px; cursor: pointer; box-shadow: 0 0 15px #f97316; transition: transform 0.1s; text-transform: lowercase; }
         button:hover { transform: scale(1.05); }
         #game-over { display: none; }
     </style>
@@ -23,15 +23,15 @@
     <div id="dash-ui">dash ready</div>
 
     <div id="menu">
-        <h1>big orange 2</h1>
-        <p>run. don't fall. dodge the spikes and saws.<br>
-        the orange is watching<br><br>
+        <h1>orange parkour</h1>
+        <p>run right. don't fall. dodge the spikes and saws.<br>
+        the boss is watching.<br><br>
         <b>A / D</b> to move | <b>W / Space</b> to double jump | <b>Shift</b> to Dash</p>
         <button onclick="startGame()">engage</button>
     </div>
 
     <div id="game-over">
-        <h1 style="color: #ef4444; text-shadow: 0 0 20px #ef4444;">juiced</h1>
+        <h1 style="color: #ea580c; text-shadow: 0 0 20px #ea580c;">juiced</h1>
         <button onclick="location.reload()">retry</button>
     </div>
 
@@ -43,65 +43,63 @@
         const scoreEl = document.getElementById('score-val');
         const dashEl = document.getElementById('dash-ui');
 
-        // --- GLOBAL VARIABLES ---
         let isPlaying = false, score = 0, frame = 0, camX = 0;
-        const keys = { w: false, a: false, d: false, shift: false };
+        const keys = { a: false, d: false, shift: false };
         let wPressed = false, shiftPressed = false; 
 
-        // Entities
         const p = { x: 100, y: 300, vx: 0, vy: 0, r: 15, grav: 0.6, jump: -11, jumps: 2, grounded: false, platVx: 0, platVy: 0, dashCooldown: 0 };
-        const boss = { x: 0, y: 60, r: 50, color: '#ea580c' }; 
+        // Boss made significantly larger (r: 80) and moved down slightly so it doesn't clip off screen
+        const boss = { x: 0, y: 100, r: 80, color: '#ea580c' }; 
         
         let platforms = [], hazards = [], particles = [], lasers = [];
         let genX = 0, lastY = 400;
 
-        // --- RESIZE LOGIC ---
         function resize() { 
             canvas.width = window.innerWidth; 
             canvas.height = window.innerHeight; 
             boss.x = canvas.width / 2; 
         }
         window.addEventListener('resize', resize);
-        resize(); // Call immediately
+        resize(); 
 
-        // --- INPUT LOGIC ---
         window.addEventListener('keydown', e => {
             let k = e.key.toLowerCase();
             if (k === 'a' || k === 'arrowleft') keys.a = true;
             if (k === 'd' || k === 'arrowright') keys.d = true;
-            if ((k === 'w' || k === 'arrowup' || e.code === 'Space') && !wPressed) { keys.w = true; wPressed = true; }
             if (k === 'shift' && !shiftPressed) { keys.shift = true; shiftPressed = true; }
+            
+            // INSTANT JUMP LOGIC: Fires exactly when the hardware key is pressed
+            if ((k === 'w' || k === 'arrowup' || e.code === 'Space') && !wPressed) { 
+                wPressed = true; 
+                if (p.jumps > 0) {
+                    p.vy = p.jump; 
+                    p.jumps--; 
+                    p.grounded = false;
+                    for(let i=0; i<5; i++) spawnParticle(p.x, p.y+p.r, '#f97316', 20, 4);
+                }
+            }
         });
+        
         window.addEventListener('keyup', e => {
             let k = e.key.toLowerCase();
             if (k === 'a' || k === 'arrowleft') keys.a = false;
             if (k === 'd' || k === 'arrowright') keys.d = false;
-            if (k === 'w' || k === 'arrowup' || e.code === 'Space') { keys.w = false; wPressed = false; }
+            if (k === 'w' || k === 'arrowup' || e.code === 'Space') wPressed = false; 
             if (k === 'shift') { keys.shift = false; shiftPressed = false; }
         });
 
-        // --- START GAME (BULLETPROOF) ---
         window.startGame = function() {
             document.getElementById('menu').style.display = 'none';
-            
-            // Reset Arrays and variables entirely
             platforms = []; hazards = []; particles = []; lasers = [];
             score = 0; frame = 0; camX = 0;
             scoreEl.innerText = score;
             p.dashCooldown = 0;
+            p.x = 200; p.y = canvas.height / 2 - 50; p.vx = 0; p.vy = 0;
 
-            // Safe Start Position
-            p.x = 200; 
-            p.y = canvas.height / 2 - 50;
-            p.vx = 0; p.vy = 0;
-
-            // GUARANTEED SAFE STARTING PLATFORM
             platforms.push({ x: 50, y: canvas.height / 2 + 50, w: 400, h: 20, type: 'static', touched: true, t: 0 });
-            
-            genX = 450;
-            lastY = canvas.height / 2 + 50;
+            genX = 450; lastY = canvas.height / 2 + 50;
 
-            generateLevel(2000); // Generate ahead
+            generateLevel(2000); 
             isPlaying = true;
             gameLoop();
         };
@@ -115,7 +113,6 @@
             particles.push({ x, y, vx: (Math.random()-0.5)*speed, vy: (Math.random()-0.5)*speed, r: Math.random()*3+2, color, life, maxLife: life });
         }
 
-        // --- LEVEL GENERATOR ---
         function generateLevel(targetX) {
             while (genX < targetX) {
                 let maxGap = Math.min(80 + score * 4, 320); 
@@ -133,9 +130,7 @@
                 if (score > 5 && rand < 0.2) { plat.type = 'moveY'; plat.range = 80; plat.speed = 0.03; } 
                 else if (score > 10 && rand < 0.4) { plat.type = 'moveX'; plat.range = 100; plat.speed = 0.02; }
 
-                platforms.push(plat);
-                genX = plat.x + plat.w;
-                lastY = plat.y;
+                platforms.push(plat); genX = plat.x + plat.w; lastY = plat.y;
 
                 if (Math.random() < 0.4 && plat.w > 60) {
                     let spikeMove = score > 15 && Math.random() < 0.5;
@@ -148,87 +143,64 @@
             }
         }
 
-        // --- GAME LOOP ---
         function update() {
             frame++;
             if (genX < camX + canvas.width + 1000) generateLevel(camX + canvas.width + 1000);
 
-            // Boss Laser Logic
             if (frame % Math.max(80, 200 - score * 2) === 0) {
                 lasers.push({ x: camX + Math.random() * canvas.width, timer: 60, state: 'warn' });
             }
 
             for (let i = lasers.length - 1; i >= 0; i--) {
-                let l = lasers[i];
-                l.timer--;
+                let l = lasers[i]; l.timer--;
                 if (l.state === 'warn' && l.timer <= 0) { l.state = 'fire'; l.timer = 15; } 
                 else if (l.state === 'fire') {
-                    if (p.x + p.r > l.x - 15 && p.x - p.r < l.x + 15) die();
+                    // Thicker laser collision detection (30px radius instead of 15px)
+                    if (p.x + p.r > l.x - 30 && p.x - p.r < l.x + 30) die();
                     if (l.timer <= 0) lasers.splice(i, 1);
                 }
             }
 
-            // --- PLAYER PHYSICS ---
             if (keys.a) p.vx -= 0.8;
             if (keys.d) p.vx += 0.8;
             p.vx *= 0.85; 
 
-            // Dash Mechanic
             if (p.dashCooldown > 0) p.dashCooldown--;
             dashEl.innerText = p.dashCooldown <= 0 ? "dash ready (shift)" : "dash cooling...";
             dashEl.style.color = p.dashCooldown <= 0 ? "#38bdf8" : "#64748b";
 
             if (keys.shift && p.dashCooldown <= 0) {
-                p.vx = keys.a ? -20 : 20; // Dash left if holding A, otherwise dash right
-                p.vy = -3; // slight upward bump
-                p.dashCooldown = 90; // 1.5 second cooldown
-                keys.shift = false;
-                for(let i=0; i<10; i++) spawnParticle(p.x, p.y, '#38bdf8', 30, 6); // Blue dash particles
+                p.vx = keys.a ? -20 : 20; p.vy = -3; p.dashCooldown = 90; keys.shift = false;
+                for(let i=0; i<10; i++) spawnParticle(p.x, p.y, '#38bdf8', 30, 6); 
             }
             
-            // Jump Logic
-            if (keys.w && p.jumps > 0) {
-                p.vy = p.jump; p.jumps--; p.grounded = false; keys.w = false;
-                for(let i=0; i<5; i++) spawnParticle(p.x, p.y+p.r, '#f97316', 20, 4);
-            }
+            p.vy += p.grav; p.x += p.vx + (p.grounded ? p.platVx : 0); p.y += p.vy + (p.grounded ? p.platVy : 0);
 
-            p.vy += p.grav;
-            p.x += p.vx + (p.grounded ? p.platVx : 0);
-            p.y += p.vy + (p.grounded ? p.platVy : 0);
-
-            // Camera follow
             let targetCamX = p.x - canvas.width / 3;
             if (targetCamX > camX) camX += (targetCamX - camX) * 0.1;
             
-            // Death boundaries
             if (p.y > canvas.height + 100 || p.x < camX - 50) die();
 
             p.grounded = false; p.platVx = 0; p.platVy = 0;
 
-            // Platform Update & Collision
             for (let i = platforms.length - 1; i >= 0; i--) {
-                let plat = platforms[i];
-                let oldX = plat.x, oldY = plat.y;
-
+                let plat = platforms[i]; let oldX = plat.x, oldY = plat.y;
                 plat.t += plat.speed || 0;
                 if (plat.type === 'moveY') plat.y += Math.sin(plat.t) * 2;
                 if (plat.type === 'moveX') plat.x += Math.cos(plat.t) * 2;
 
                 if ((plat.type === 'moveX' || plat.type === 'moveY') && Math.random() < 0.2) {
-                    spawnParticle(plat.x + Math.random()*plat.w, plat.y + 10, '#475569', 30, 1);
+                    spawnParticle(plat.x + Math.random()*plat.w, plat.y + 10, '#ea580c', 30, 1);
                 }
 
-                // Top-down Collision
                 if (p.vy >= 0 && p.x + p.r > plat.x && p.x - p.r < plat.x + plat.w && p.y + p.r >= plat.y && p.y - p.r < plat.y + 10) {
                     p.y = plat.y - p.r; p.vy = 0; p.jumps = 2; p.grounded = true;
                     p.platVx = plat.x - oldX; p.platVy = plat.y - oldY;
-
                     if (!plat.touched) { plat.touched = true; score++; scoreEl.innerText = score; }
                 }
                 if (plat.x + plat.w < camX - 200) platforms.splice(i, 1);
             }
 
-            // Hazards Update
             for (let i = hazards.length - 1; i >= 0; i--) {
                 let h = hazards[i];
                 if (h.type === 'spike') {
@@ -250,31 +222,23 @@
                 }
             }
 
-            // Particles
             for (let i = particles.length - 1; i >= 0; i--) {
-                let pt = particles[i];
-                pt.x += pt.vx; pt.y += pt.vy; pt.life--;
+                let pt = particles[i]; pt.x += pt.vx; pt.y += pt.vy; pt.life--;
                 if (pt.life <= 0) particles.splice(i, 1);
             }
         }
 
         function drawFace(x, y, r, color, isBoss) {
-            ctx.fillStyle = color;
-            ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
             
-            ctx.fillStyle = isBoss ? '#facc15' : 'white'; 
-            ctx.beginPath(); ctx.arc(x - r*0.3, y - r*0.2, r*0.15, 0, Math.PI*2); ctx.fill();
-            ctx.beginPath(); ctx.arc(x + r*0.3, y - r*0.2, r*0.15, 0, Math.PI*2); ctx.fill();
-            
+            // Replaced white/yellow scleras with just plain black, circular, soulless eyes
             ctx.fillStyle = 'black';
-            ctx.beginPath(); ctx.arc(x - r*0.3, y - r*0.2, r*0.05, 0, Math.PI*2); ctx.fill();
-            ctx.beginPath(); ctx.arc(x + r*0.3, y - r*0.2, r*0.05, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x - r*0.3, y - r*0.2, r*0.1, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + r*0.3, y - r*0.2, r*0.1, 0, Math.PI*2); ctx.fill();
             
-            ctx.strokeStyle = 'black'; ctx.lineWidth = r*0.1;
-            ctx.beginPath();
+            ctx.strokeStyle = 'black'; ctx.lineWidth = r*0.1; ctx.beginPath();
             if (isBoss) {
-                ctx.moveTo(x - r*0.5, y + r*0.3);
-                ctx.quadraticCurveTo(x, y + r*0.6, x + r*0.5, y + r*0.3);
+                ctx.moveTo(x - r*0.5, y + r*0.3); ctx.quadraticCurveTo(x, y + r*0.6, x + r*0.5, y + r*0.3);
             } else {
                 ctx.arc(x, y + r*0.1, r*0.5, 0, Math.PI);
             }
@@ -283,18 +247,16 @@
 
         function draw() {
             ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            ctx.save();
-            ctx.translate(-camX, 0); 
+            ctx.save(); ctx.translate(-camX, 0); 
 
-            // Draw Platforms
             for (let plat of platforms) {
-                ctx.fillStyle = plat.touched ? '#334155' : '#475569';
+                // Platforms are now orange (darker orange if touched)
+                ctx.fillStyle = plat.touched ? '#c2410c' : '#ea580c';
                 ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
-                ctx.fillStyle = '#94a3b8'; ctx.fillRect(plat.x, plat.y, plat.w, 4);
+                // Lighter orange top border
+                ctx.fillStyle = '#fdba74'; ctx.fillRect(plat.x, plat.y, plat.w, 4);
             }
 
-            // Draw Hazards
             for (let h of hazards) {
                 if (h.type === 'spike') {
                     ctx.fillStyle = '#ef4444'; ctx.beginPath();
@@ -312,27 +274,25 @@
                 }
             }
 
-            // Draw Lasers
             for (let l of lasers) {
                 if (l.state === 'warn') {
-                    ctx.fillStyle = 'rgba(239, 68, 68, 0.3)'; ctx.fillRect(l.x - 2, 0, 4, canvas.height);
+                    // Thicker orange warning beam
+                    ctx.fillStyle = 'rgba(234, 88, 12, 0.4)'; 
+                    ctx.fillRect(l.x - 5, 0, 10, canvas.height);
                 } else if (l.state === 'fire') {
-                    ctx.fillStyle = '#ef4444'; ctx.fillRect(l.x - 15, 0, 30, canvas.height);
-                    ctx.fillStyle = '#ffffff'; ctx.fillRect(l.x - 5, 0, 10, canvas.height);
+                    // Thicker orange firing beam with white core
+                    ctx.fillStyle = '#ea580c'; ctx.fillRect(l.x - 30, 0, 60, canvas.height);
+                    ctx.fillStyle = '#ffffff'; ctx.fillRect(l.x - 15, 0, 30, canvas.height);
                 }
             }
 
-            // Draw Particles
             for (let pt of particles) {
                 ctx.fillStyle = pt.color; ctx.globalAlpha = Math.max(0, pt.life / pt.maxLife);
                 ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.r, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1;
             }
 
-            // Draw Player
             drawFace(p.x, p.y, p.r, '#f97316', false);
             ctx.restore(); 
-
-            // Draw Boss
             drawFace(boss.x, boss.y, boss.r, boss.color, true);
         }
 
