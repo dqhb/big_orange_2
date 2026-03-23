@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>big orange 2</title>
+    <title>Orange Parkour</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #0f172a; font-family: 'Segoe UI', sans-serif; color: white; user-select: none; text-transform: lowercase; }
         canvas { display: block; }
@@ -21,9 +21,9 @@
     <div id="ui">score: <span id="score-val">0</span></div>
 
     <div id="menu">
-        <h1>big orange 2</h1>
+        <h1>orange parkour</h1>
         <p>run right. don't fall. dodge the spikes and saws.<br>
-        the orange is watching<br><br>
+        the boss is watching.<br><br>
         <b>a / d</b> to move | <b>w / space</b> to double jump</p>
         <button id="start-btn">engage</button>
     </div>
@@ -40,14 +40,28 @@
         const ctx = canvas.getContext('2d');
         const scoreEl = document.getElementById('score-val');
 
-        function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; boss.x = canvas.width / 2; }
+        // --- 1. DEFINE VARIABLES FIRST ---
+        let isPlaying = false, score = 0, frame = 0, camX = 0;
+        const keys = { w: false, a: false, d: false, space: false };
+        let wPressed = false; 
+
+        // Entities
+        const p = { x: 100, y: 300, vx: 0, vy: 0, r: 15, speed: 6, grav: 0.6, jump: -11, jumps: 2, grounded: false, platVx: 0, platVy: 0 };
+        const boss = { x: 0, y: 60, r: 50, color: '#ea580c' }; // x gets set in resize()
+        
+        let platforms = [], hazards = [], particles = [], lasers = [];
+        let genX = 0, lastY = 400;
+
+        // --- 2. THEN RESIZE (Now it knows what 'boss' is) ---
+        function resize() { 
+            canvas.width = window.innerWidth; 
+            canvas.height = window.innerHeight; 
+            boss.x = canvas.width / 2; 
+        }
         window.addEventListener('resize', resize);
         resize();
 
-        let isPlaying = false, score = 0, frame = 0, camX = 0;
-        const keys = { w: false, a: false, d: false, space: false };
-        let wPressed = false; // For jump toggling
-
+        // --- INPUTS ---
         window.addEventListener('keydown', e => {
             let k = e.key.toLowerCase();
             if (k === 'a' || k === 'arrowleft') keys.a = true;
@@ -65,18 +79,12 @@
             }
         });
 
-        // Entities
-        const p = { x: 100, y: 300, vx: 0, vy: 0, r: 15, speed: 6, grav: 0.6, jump: -11, jumps: 2, grounded: false, platVx: 0, platVy: 0 };
-        const boss = { x: canvas.width / 2, y: 60, r: 50, color: '#ea580c' };
-        
-        let platforms = [], hazards = [], particles = [], lasers = [];
-        let genX = 0, lastY = 400;
-
+        // --- BUTTON LISTENER ---
         document.getElementById('start-btn').addEventListener('click', () => {
             document.getElementById('menu').style.display = 'none';
             p.y = canvas.height / 2;
             genX = -100;
-            generateLevel(2000); // Initial chunk
+            generateLevel(2000); // Generate initial platforms
             isPlaying = true;
             gameLoop();
         });
@@ -100,7 +108,7 @@
                 
                 let y = lastY + gapY;
                 if (y > canvas.height - 100) y = canvas.height - 100;
-                if (y < 250) y = 250; // Keep away from boss area
+                if (y < 250) y = 250; 
                 
                 let w = Math.random() * 100 + 100;
                 let plat = { x: genX + gapX, y: y, w: w, h: 20, type: 'static', touched: false, t: Math.random()*100 };
@@ -133,13 +141,14 @@
             }
         }
 
+        // --- GAME PHYSICS & LOGIC ---
         function update() {
             frame++;
             
-            // Generate more level ahead
+            // Generate more level ahead as you run
             if (genX < camX + canvas.width + 1000) generateLevel(camX + canvas.width + 1000);
 
-            // Boss Laser Logic (Like Big Orange vertical warning)
+            // Boss Laser Logic
             if (frame % Math.max(80, 200 - score * 2) === 0) {
                 lasers.push({ x: camX + Math.random() * canvas.width, timer: 60, state: 'warn' });
             }
@@ -150,33 +159,34 @@
                 if (l.state === 'warn' && l.timer <= 0) {
                     l.state = 'fire'; l.timer = 15;
                 } else if (l.state === 'fire') {
-                    // Check collision
                     if (p.x + p.r > l.x - 15 && p.x - p.r < l.x + 15) die();
                     if (l.timer <= 0) lasers.splice(i, 1);
                 }
             }
 
-            // Player Physics & Input
+            // Player Movement
             if (keys.a) p.vx -= 0.8;
             if (keys.d) p.vx += 0.8;
-            p.vx *= 0.85; // Friction
+            p.vx *= 0.85; 
             
+            // Double Jump Logic
             if (keys.w && p.jumps > 0) {
-                p.vy = p.jump; p.jumps--; p.grounded = false; keys.w = false;
+                p.vy = p.jump; 
+                p.jumps--; 
+                p.grounded = false; 
+                keys.w = false; // Require releasing the key to jump again
                 for(let i=0; i<5; i++) spawnParticle(p.x, p.y+p.r, '#f97316', 20, 4);
             }
 
             p.vy += p.grav;
-            
-            // Apply platform momentum
             p.x += p.vx + (p.grounded ? p.platVx : 0);
             p.y += p.vy + (p.grounded ? p.platVy : 0);
 
-            // Camera follow player (keep player centered, but don't go backwards)
+            // Camera follow player
             let targetCamX = p.x - canvas.width / 3;
             if (targetCamX > camX) camX += (targetCamX - camX) * 0.1;
             
-            // Death by falling or lagging behind
+            // Death checks
             if (p.y > canvas.height + 100 || p.x < camX - 50) die();
 
             p.grounded = false;
@@ -194,19 +204,18 @@
                 let pVx = plat.x - oldX;
                 let pVy = plat.y - oldY;
 
-                // Particles for moving platforms
                 if ((plat.type === 'moveX' || plat.type === 'moveY') && Math.random() < 0.2) {
                     spawnParticle(plat.x + Math.random()*plat.w, plat.y + 10, '#475569', 30, 1);
                 }
 
-                // AABB Collision (only top down)
+                // Top-down Collision
                 if (p.vy >= 0 && 
                     p.x + p.r > plat.x && p.x - p.r < plat.x + plat.w && 
                     p.y + p.r >= plat.y && p.y - p.r < plat.y + 10) {
                     
                     p.y = plat.y - p.r;
                     p.vy = 0;
-                    p.jumps = 2;
+                    p.jumps = 2; // Reset jumps
                     p.grounded = true;
                     p.platVx = pVx; p.platVy = pVy;
 
@@ -216,7 +225,6 @@
                     }
                 }
 
-                // Cleanup old platforms
                 if (plat.x + plat.w < camX - 200) platforms.splice(i, 1);
             }
 
@@ -230,18 +238,15 @@
                         if (Math.random() < 0.2) spawnParticle(h.p.x + h.xOff, h.p.y, '#ef4444', 20, 2);
                     }
                     let sx = h.p.x + h.xOff; let sy = h.p.y;
-                    // Circle-Triangle rough collision
                     if (Math.hypot(p.x - sx, p.y - sy + 10) < p.r + 10) die();
                     if (h.p.x + h.p.w < camX - 200) hazards.splice(i, 1);
                 } 
                 else if (h.type === 'saw') {
                     h.t += h.speed;
-                    let baseX = h.x, baseY = h.y;
                     if (h.moveDir === 'y') h.y += Math.sin(h.t) * 3;
                     if (h.moveDir === 'x') h.x += Math.cos(h.t) * 3;
                     
                     if (Math.random() < 0.3) spawnParticle(h.x, h.y, '#94a3b8', 20, 1);
-
                     if (Math.hypot(p.x - h.x, p.y - h.y) < p.r + h.r - 5) die();
                     if (h.x < camX - 200) hazards.splice(i, 1);
                 }
@@ -259,20 +264,17 @@
             ctx.fillStyle = color;
             ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
             
-            ctx.fillStyle = isBoss ? '#facc15' : 'white'; // Evil yellow eyes for boss
-            // Eyes
+            ctx.fillStyle = isBoss ? '#facc15' : 'white'; 
             ctx.beginPath(); ctx.arc(x - r*0.3, y - r*0.2, r*0.15, 0, Math.PI*2); ctx.fill();
             ctx.beginPath(); ctx.arc(x + r*0.3, y - r*0.2, r*0.15, 0, Math.PI*2); ctx.fill();
-            // Pupils
+            
             ctx.fillStyle = 'black';
             ctx.beginPath(); ctx.arc(x - r*0.3, y - r*0.2, r*0.05, 0, Math.PI*2); ctx.fill();
             ctx.beginPath(); ctx.arc(x + r*0.3, y - r*0.2, r*0.05, 0, Math.PI*2); ctx.fill();
             
-            // Smile
             ctx.strokeStyle = 'black'; ctx.lineWidth = r*0.1;
             ctx.beginPath();
             if (isBoss) {
-                // Evil grin
                 ctx.moveTo(x - r*0.5, y + r*0.3);
                 ctx.quadraticCurveTo(x, y + r*0.6, x + r*0.5, y + r*0.3);
             } else {
@@ -281,17 +283,17 @@
             ctx.stroke();
         }
 
+        // --- DRAWING ---
         function draw() {
             ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
             
             ctx.save();
-            ctx.translate(-camX, 0); // Apply Camera
+            ctx.translate(-camX, 0); // Apply Camera Offset
 
             // Draw Platforms
             for (let plat of platforms) {
                 ctx.fillStyle = plat.touched ? '#334155' : '#475569';
                 ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
-                // Top edge highlight
                 ctx.fillStyle = '#94a3b8';
                 ctx.fillRect(plat.x, plat.y, plat.w, 4);
             }
@@ -301,17 +303,17 @@
                 if (h.type === 'spike') {
                     ctx.fillStyle = '#ef4444';
                     ctx.beginPath();
-                    ctx.moveTo(h.p.x + h.xOff, h.p.y - 20); // Top tip
-                    ctx.lineTo(h.p.x + h.xOff - 10, h.p.y); // Bottom left
-                    ctx.lineTo(h.p.x + h.xOff + 10, h.p.y); // Bottom right
+                    ctx.moveTo(h.p.x + h.xOff, h.p.y - 20); 
+                    ctx.lineTo(h.p.x + h.xOff - 10, h.p.y); 
+                    ctx.lineTo(h.p.x + h.xOff + 10, h.p.y); 
                     ctx.fill();
                 } else if (h.type === 'saw') {
                     ctx.save();
                     ctx.translate(h.x, h.y);
-                    ctx.rotate(frame * 0.2); // Spin
+                    ctx.rotate(frame * 0.2); 
                     ctx.fillStyle = '#64748b';
                     ctx.beginPath();
-                    for(let j=0; j<8; j++) { // Saw teeth
+                    for(let j=0; j<8; j++) { 
                         ctx.lineTo(Math.cos(j*Math.PI/4)*h.r, Math.sin(j*Math.PI/4)*h.r);
                         ctx.lineTo(Math.cos(j*Math.PI/4 + 0.2)*(h.r+5), Math.sin(j*Math.PI/4 + 0.2)*(h.r+5));
                     }
@@ -330,25 +332,25 @@
                     ctx.fillStyle = '#ef4444';
                     ctx.fillRect(l.x - 15, 0, 30, canvas.height);
                     ctx.fillStyle = '#ffffff';
-                    ctx.fillRect(l.x - 5, 0, 10, canvas.height); // Core
+                    ctx.fillRect(l.x - 5, 0, 10, canvas.height);
                 }
             }
 
             // Draw Particles
             for (let pt of particles) {
                 ctx.fillStyle = pt.color;
-                ctx.globalAlpha = pt.life / pt.maxLife;
+                ctx.globalAlpha = Math.max(0, pt.life / pt.maxLife);
                 ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.r, 0, Math.PI*2); ctx.fill();
                 ctx.globalAlpha = 1;
             }
 
-            // Draw Player Orange
+            // Draw Player
             drawFace(p.x, p.y, p.r, '#f97316', false);
 
             ctx.restore(); // End Camera space
 
-            // Draw Boss Orange (Fixed to screen space, looking down)
-            drawFace(canvas.width / 2, 0, boss.r, boss.color, true);
+            // Draw Boss (Fixed to screen space)
+            drawFace(boss.x, boss.y, boss.r, boss.color, true);
         }
 
         function gameLoop() { if (isPlaying) { update(); draw(); requestAnimationFrame(gameLoop); } }
