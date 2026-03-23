@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>3D Orange Racer</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #111; }
+        #ui { position: absolute; top: 20px; left: 20px; color: #ff8800; font-family: sans-serif; font-size: 20px; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div id="ui">speed: <span id="spd">0</span></div>
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+
+        // --- SCENE SETUP ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a0a);
+        scene.fog = new THREE.Fog(0x0a0a0a, 10, 50);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // --- LIGHTING ---
+        const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambient);
+        const sun = new THREE.DirectionalLight(0xff8800, 1);
+        sun.position.set(5, 10, 5);
+        scene.add(sun);
+
+        // --- THE TRACK (Floor) ---
+        const grid = new THREE.GridHelper(200, 40, 0xff8800, 0x222222);
+        scene.add(grid);
+
+        // --- THE CAR ---
+        const carGroup = new THREE.Group();
+        const body = new THREE.Mesh(
+            new THREE.BoxGeometry(1, 0.5, 2),
+            new THREE.MeshStandardMaterial({ color: 0xff8800 })
+        );
+        body.position.y = 0.25;
+        carGroup.add(body);
+        scene.add(carGroup);
+
+        // --- CONTROLS ---
+        const keys = { w:0, a:0, s:0, d:0 };
+        window.onkeydown = (e) => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = 1; };
+        window.onkeyup = (e) => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = 0; };
+
+        // --- PHYSICS VARS ---
+        let speed = 0;
+        let rotation = 0;
+        const maxSpeed = 0.4;
+        const accel = 0.01;
+        const friction = 0.96;
+        const turnSpeed = 0.04;
+
+        function update() {
+            // Drive logic
+            if (keys.w) speed += accel;
+            if (keys.s) speed -= accel;
+            speed *= friction;
+
+            // Steer logic (only works if moving)
+            if (Math.abs(speed) > 0.01) {
+                const direction = speed > 0 ? 1 : -1;
+                if (keys.a) rotation += turnSpeed * direction * (Math.abs(speed)/maxSpeed);
+                if (keys.d) rotation -= turnSpeed * direction * (Math.abs(speed)/maxSpeed);
+            }
+
+            carGroup.rotation.y = rotation;
+            carGroup.position.x += Math.sin(rotation) * speed;
+            carGroup.position.z += Math.cos(rotation) * speed;
+
+            // Camera follow (Lerp for smoothness)
+            const camOffset = new THREE.Vector3(
+                Math.sin(rotation) * -5, 
+                2, 
+                Math.cos(rotation) * -5
+            );
+            camera.position.lerp(carGroup.position.clone().add(camOffset), 0.1);
+            camera.lookAt(carGroup.position);
+
+            document.getElementById('spd').innerText = Math.abs(speed * 100).toFixed(0);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            update();
+            renderer.render(scene, camera);
+        }
+
+        window.onresize = () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        };
+
+        animate();
+    </script>
+</body>
+</html>
