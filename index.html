@@ -1,91 +1,172 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>3D Orange Racer</title>
+    <title>Orange Drift: Turbo Edition</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #111; }
-        #ui { position: absolute; top: 20px; left: 20px; color: #ff8800; font-family: sans-serif; font-size: 20px; pointer-events: none; }
+        body { margin: 0; overflow: hidden; background: #000; }
+        #ui { 
+            position: absolute; top: 20px; left: 20px; 
+            color: #ff8800; font-family: 'Courier New', monospace; 
+            font-size: 24px; text-shadow: 0 0 10px #ff4400;
+            pointer-events: none; 
+        }
+        #instructions {
+            position: absolute; bottom: 20px; width: 100%;
+            text-align: center; color: #555; font-family: sans-serif;
+        }
     </style>
 </head>
 <body>
-    <div id="ui">speed: <span id="spd">0</span></div>
+    <div id="ui">KM/H: <span id="spd">0</span></div>
+    <div id="instructions">WASD to Drive | Space to Drift (Visual Only)</div>
+
     <script type="importmap">
         { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
     </script>
     <script type="module">
         import * as THREE from 'three';
 
-        // --- SCENE SETUP ---
+        // --- SCENE & RENDERER ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x0a0a0a);
-        scene.fog = new THREE.Fog(0x0a0a0a, 10, 50);
+        scene.background = new THREE.Color(0x020205);
+        scene.fog = new THREE.FogExp2(0x020205, 0.05);
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.toneMapping = THREE.ReinhardToneMapping;
         document.body.appendChild(renderer.domElement);
 
         // --- LIGHTING ---
-        const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+        const ambient = new THREE.AmbientLight(0xffffff, 0.2);
         scene.add(ambient);
-        const sun = new THREE.DirectionalLight(0xff8800, 1);
-        sun.position.set(5, 10, 5);
-        scene.add(sun);
 
-        // --- THE TRACK (Floor) ---
-        const grid = new THREE.GridHelper(200, 40, 0xff8800, 0x222222);
-        scene.add(grid);
+        // --- THE DETAILED CAR ---
+        const car = new THREE.Group();
+        
+        // Body
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xff6600, metalness: 0.8, roughness: 0.2 });
+        const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.4, 2.5), bodyMat);
+        body.position.y = 0.3;
+        car.add(body);
 
-        // --- THE CAR ---
-        const carGroup = new THREE.Group();
-        const body = new THREE.Mesh(
-            new THREE.BoxGeometry(1, 0.5, 2),
-            new THREE.MeshStandardMaterial({ color: 0xff8800 })
-        );
-        body.position.y = 0.25;
-        carGroup.add(body);
-        scene.add(carGroup);
+        // Cockpit
+        const glassMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 1, roughness: 0 });
+        const cockpit = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.4, 1), glassMat);
+        cockpit.position.set(0, 0.6, -0.2);
+        car.add(cockpit);
 
-        // --- CONTROLS ---
+        // Spoiler
+        const spoiler = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.1, 0.4), bodyMat);
+        spoiler.position.set(0, 0.6, 1);
+        car.add(spoiler);
+
+        // Headlights (The "Eyes")
+        const lightGeo = new THREE.BoxGeometry(0.3, 0.1, 0.1);
+        const lightMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+        const lLight = new THREE.Mesh(lightGeo, lightMat);
+        lLight.position.set(0.4, 0.3, -1.25);
+        const rLight = lLight.clone();
+        rLight.position.x = -0.4;
+        car.add(lLight, rLight);
+
+        // Underglow
+        const underglow = new THREE.PointLight(0xff4400, 2, 3);
+        underglow.position.y = 0.1;
+        car.add(underglow);
+
+        scene.add(car);
+
+        // --- THE TRACK (Neon Road) ---
+        const trackWidth = 10;
+        const trackLength = 1000;
+        const roadGeo = new THREE.PlaneGeometry(trackWidth, trackLength);
+        const roadMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        const road = new THREE.Mesh(roadGeo, roadMat);
+        road.rotation.x = -Math.PI / 2;
+        scene.add(road);
+
+        // Neon Curbs
+        const curbGeo = new THREE.BoxGeometry(0.2, 0.1, trackLength);
+        const curbMat = new THREE.MeshBasicMaterial({ color: 0xff00ff });
+        const leftCurb = new THREE.Mesh(curbGeo, curbMat);
+        leftCurb.position.set(-trackWidth/2, 0.05, 0);
+        const rightCurb = leftCurb.clone();
+        rightCurb.position.x = trackWidth/2;
+        scene.add(leftCurb, rightCurb);
+
+        // --- PARTICLES (Smoke) ---
+        const particles = [];
+        const partGeo = new THREE.SphereGeometry(0.1, 4, 4);
+        const partMat = new THREE.MeshBasicMaterial({ color: 0x555555, transparent: true, opacity: 0.5 });
+
+        function createParticle() {
+            const p = new THREE.Mesh(partGeo, partMat.clone());
+            p.position.copy(car.position);
+            p.position.y = 0.1;
+            p.position.z += 1;
+            p.life = 1.0;
+            scene.add(p);
+            particles.push(p);
+        }
+
+        // --- DRIVE PHYSICS ---
         const keys = { w:0, a:0, s:0, d:0 };
         window.onkeydown = (e) => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = 1; };
         window.onkeyup = (e) => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = 0; };
 
-        // --- PHYSICS VARS ---
         let speed = 0;
         let rotation = 0;
-        const maxSpeed = 0.4;
-        const accel = 0.01;
-        const friction = 0.96;
-        const turnSpeed = 0.04;
+        const maxSpeed = 1.2; // FASTER
+        const accel = 0.02;
+        const friction = 0.98;
+        const turnSpeed = 0.05;
 
         function update() {
-            // Drive logic
             if (keys.w) speed += accel;
             if (keys.s) speed -= accel;
             speed *= friction;
 
-            // Steer logic (only works if moving)
-            if (Math.abs(speed) > 0.01) {
-                const direction = speed > 0 ? 1 : -1;
-                if (keys.a) rotation += turnSpeed * direction * (Math.abs(speed)/maxSpeed);
-                if (keys.d) rotation -= turnSpeed * direction * (Math.abs(speed)/maxSpeed);
+            // Drifting logic: more turn at high speed
+            if (Math.abs(speed) > 0.05) {
+                const rotMult = keys.w && (keys.a || keys.d) ? 1.2 : 1.0;
+                if (keys.a) rotation += turnSpeed * rotMult;
+                if (keys.d) rotation -= turnSpeed * rotMult;
+                
+                // Spawn particles if turning hard
+                if (keys.a || keys.d) createParticle();
             }
 
-            carGroup.rotation.y = rotation;
-            carGroup.position.x += Math.sin(rotation) * speed;
-            carGroup.position.z += Math.cos(rotation) * speed;
+            car.rotation.y = rotation;
+            car.position.x += Math.sin(rotation) * speed;
+            car.position.z += Math.cos(rotation) * speed;
 
-            // Camera follow (Lerp for smoothness)
-            const camOffset = new THREE.Vector3(
-                Math.sin(rotation) * -5, 
-                2, 
-                Math.cos(rotation) * -5
+            // Particle Update
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.life -= 0.02;
+                p.scale.multiplyScalar(1.02);
+                p.material.opacity = p.life;
+                if (p.life <= 0) {
+                    scene.remove(p);
+                    particles.splice(i, 1);
+                }
+            }
+
+            // Camera follow + Speed FOV
+            const camDist = -6 - (speed * 5);
+            const camHeight = 2 + (speed * 2);
+            const targetCamPos = new THREE.Vector3(
+                car.position.x + Math.sin(rotation) * camDist,
+                car.position.y + camHeight,
+                car.position.z + Math.cos(rotation) * camDist
             );
-            camera.position.lerp(carGroup.position.clone().add(camOffset), 0.1);
-            camera.lookAt(carGroup.position);
+            camera.position.lerp(targetCamPos, 0.1);
+            camera.lookAt(car.position);
+            camera.fov = 75 + (speed * 30); // Visual Speed stretch
+            camera.updateProjectionMatrix();
 
-            document.getElementById('spd').innerText = Math.abs(speed * 100).toFixed(0);
+            document.getElementById('spd').innerText = Math.abs(speed * 200).toFixed(0);
         }
 
         function animate() {
